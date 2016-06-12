@@ -1,0 +1,1457 @@
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    1
+
+************ OBJECT LISTING ************
+
+FILE NAME: G:\Casio SDK\Projekte\Firework\Snow.c
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+          Snow.c     1    #include "mathf.h"
+          Snow.c     2    
+          Snow.c     3    char *Disp_GetVRAMPtr(void);
+          Snow.c     4    int Timer_Install(int TimerID, void (*handler)(void), int delay);
+          Snow.c     5    int Timer_Start(int TimerID);
+          Snow.c     6    void App_PROG();
+          Snow.c     7    int RTC_GetTicks();
+          Snow.c     8    void AllClear_VRAM();
+          Snow.c     9    
+          Snow.c    10    typedef struct{
+          Snow.c    11        unsigned int x1;
+          Snow.c    12        unsigned int y1;
+          Snow.c    13        unsigned int x2;
+          Snow.c    14        unsigned int y2;
+          Snow.c    15        unsigned char f[4];
+          Snow.c    16        unsigned int on_bits;
+          Snow.c    17        unsigned int off_bits;
+          Snow.c    18    } TShape;
+          Snow.c    19    
+          Snow.c    20    void ShapeToVRAM( TShape* x ); 
+          Snow.c    21    
+          Snow.c    22    char *vram;
+          Snow.c    23    
+          Snow.c    24    const int SysCallWrapper[] = {0xD201422B,0x60F20000,0x80010070};
+          Snow.c    25    const int (*iSysCallFuncPtr)( int R4, int R5, int R6, int R7, int FNo ) = (void*)&SysCallWrapper;
+          Snow.c    26    #define Alpha_GetData(VarName,Dest) (void)(*iSysCallFuncPtr)( VarName,(int)Dest, 0, 0, 0x04DF)
+          Snow.c    27    #define Alpha_ClearAll() (void)(*iSysCallFuncPtr)( 0,0, 0, 0, 0x004E1)
+          Snow.c    28    
+          Snow.c    29    int InputString( unsigned char*buff, unsigned char *heading, int maxlen );
+          Snow.c    30    
+          Snow.c    31    static unsigned int lastrandom=0x12345678;
+          Snow.c    32    
+          Snow.c    33    unsigned int random( int seed){
+P   00000000              _random:                         ; function: random
+                                                           ; frame size=4
+    00000000 4F12                   STS.L       MACL,@-R15
+          Snow.c    34        if (seed) lastrandom=seed;
+    00000002 2448                   TST         R4,R4
+    00000004 D53C                   MOV.L       L413+4,R5  ; __$lastrandom
+    00000006 8900                   BT          L366
+    00000008 2542                   MOV.L       R4,@R5
+    0000000A              L366:                             
+          Snow.c    35        lastrandom = ( 0x41C64E6D*lastrandom ) + 0x3039;
+    0000000A D33C                   MOV.L       L413+8,R3  ; H'41C64E6D
+    0000000C 6252                   MOV.L       @R5,R2
+    0000000E 0237                   MUL.L       R3,R2
+    00000010 9170                   MOV.W       L413,R1    ; H'3039
+    00000012 031A                   STS         MACL,R3
+    00000014 331C                   ADD         R1,R3
+          Snow.c    36        return ( lastrandom >> 16 );
+    00000016 6033                   MOV         R3,R0
+    00000018 2532                   MOV.L       R3,@R5
+    0000001A 4029                   SHLR16      R0
+          Snow.c    37    }
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    2
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    0000001C 000B                   RTS
+    0000001E 4F16                   LDS.L       @R15+,MACL
+          Snow.c    38    
+          Snow.c    39    const char sprite[9][3] = {
+          Snow.c    40    { 0 , 1 , 0 },
+          Snow.c    41    { 1 , 1 , 1 },
+          Snow.c    42    { 1 , 0 , 1 },
+          Snow.c    43    { 1 , 0 , 1 },
+          Snow.c    44    { 1 , 0 , 1 },
+          Snow.c    45    { 1 , 1 , 1 },
+          Snow.c    46    { 0 , 0 , 1 },
+          Snow.c    47    { 0 , 0 , 1 },
+          Snow.c    48    { 0 , 0 , 1 }
+          Snow.c    49    };
+          Snow.c    50    
+          Snow.c    51    #define abs(x) (x < 0)?-x:x
+          Snow.c    52    #define sgn(x) (x < 0)?-1:(x == 0)?0:1
+          Snow.c    53    
+          Snow.c    54    void setpixel(unsigned char x, char y)
+    00000020              _setpixel:                       ; function: setpixel
+                                                           ; frame size=32
+    00000020 4F22                   STS.L       PR,@-R15
+          Snow.c    55    {
+          Snow.c    56            TShape t;
+          Snow.c    57            if(x&~127 || y&~63) return;
+    00000022 624C                   EXTU.B      R4,R2
+    00000024 7FE4                   ADD         #-28,R15
+    00000026 E380                   MOV         #-128,R3
+    00000028 2238                   TST         R3,R2
+    0000002A 8B14                   BF          L370
+    0000002C 605E                   EXTS.B      R5,R0
+    0000002E E2C0                   MOV         #-64,R2
+    00000030 2028                   TST         R2,R0
+    00000032 8B10                   BF          L370
+          Snow.c    58            t.x1 = x;
+    00000034 644C                   EXTU.B      R4,R4
+          Snow.c    59            t.y1 = y;
+    00000036 655E                   EXTS.B      R5,R5
+    00000038 2F42                   MOV.L       R4,@R15
+          Snow.c    60            t.f[0] = 2;
+    0000003A E302                   MOV         #2,R3
+    0000003C 1F51                   MOV.L       R5,@(4,R15)
+    0000003E E010                   MOV         #16,R0
+    00000040 0F34                   MOV.B       R3,@(R0,R15)
+          Snow.c    61            t.f[1] = 1;
+    00000042 E401                   MOV         #1,R4
+          Snow.c    62            t.f[2] = 1;
+          Snow.c    63            t.f[3] = 1;
+          Snow.c    64            
+          Snow.c    65            ShapeToDD(&t);
+    00000044 D32E                   MOV.L       L413+12,R3 ; _ShapeToDD
+    00000046 E011                   MOV         #17,R0
+    00000048 0F44                   MOV.B       R4,@(R0,R15)
+    0000004A E012                   MOV         #18,R0
+    0000004C 0F44                   MOV.B       R4,@(R0,R15)
+    0000004E E013                   MOV         #19,R0
+    00000050 0F44                   MOV.B       R4,@(R0,R15)
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    3
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    00000052 430B                   JSR         @R3
+    00000054 64F3                   MOV         R15,R4
+          Snow.c    66    }
+    00000056              L370:                             
+    00000056 7F1C                   ADD         #28,R15
+    00000058 4F26                   LDS.L       @R15+,PR
+    0000005A 000B                   RTS
+    0000005C 0009                   NOP
+          Snow.c    67    
+          Snow.c    68    void line(int x1, int y1, int x2, int y2)
+    0000005E              _line:                           ; function: line
+                                                           ; frame size=36
+          Snow.c    69    {
+          Snow.c    70            int i, x, y, dx, dy, sx, sy, cumul;
+          Snow.c    71            x = x1;
+          Snow.c    72            y = y1;
+          Snow.c    73            dx = x2 - x1;
+    0000005E 6363                   MOV         R6,R3
+    00000060 2FE6                   MOV.L       R14,@-R15
+          Snow.c    74            dy = y2 - y1;
+    00000062 6273                   MOV         R7,R2
+    00000064 2FD6                   MOV.L       R13,@-R15
+    00000066 3348                   SUB         R4,R3
+    00000068 2FC6                   MOV.L       R12,@-R15
+    0000006A 6D43                   MOV         R4,R13
+    0000006C 2FB6                   MOV.L       R11,@-R15
+    0000006E 6C53                   MOV         R5,R12
+    00000070 2FA6                   MOV.L       R10,@-R15
+    00000072 6433                   MOV         R3,R4
+    00000074 2F96                   MOV.L       R9,@-R15
+    00000076 3258                   SUB         R5,R2
+    00000078 2F86                   MOV.L       R8,@-R15
+          Snow.c    75            sx = sgn(dx);
+    0000007A 4411                   CMP/PZ      R4
+    0000007C 4F22                   STS.L       PR,@-R15
+    0000007E 7FFC                   ADD         #-4,R15
+    00000080 8D02                   BT/S        L371
+    00000082 6523                   MOV         R2,R5
+    00000084 A005                   BRA         L373
+    00000086 E8FF                   MOV         #-1,R8
+    00000088              L371:                             
+    00000088 2448                   TST         R4,R4
+    0000008A 8B01                   BF          L372
+    0000008C A001                   BRA         L373
+    0000008E E800                   MOV         #0,R8
+    00000090              L372:                             
+    00000090 E801                   MOV         #1,R8
+    00000092              L373:                             
+          Snow.c    76            sy = sgn(dy);
+    00000092 4511                   CMP/PZ      R5
+    00000094 8901                   BT          L375
+    00000096 A005                   BRA         L377
+    00000098 E2FF                   MOV         #-1,R2
+    0000009A              L375:                             
+    0000009A 2558                   TST         R5,R5
+    0000009C 8B01                   BF          L376
+    0000009E A001                   BRA         L377
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    4
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    000000A0 E200                   MOV         #0,R2
+    000000A2              L376:                             
+    000000A2 E201                   MOV         #1,R2
+    000000A4              L377:                             
+          Snow.c    77            dx = abs(dx);
+    000000A4 4411                   CMP/PZ      R4
+    000000A6 8D02                   BT/S        L379
+    000000A8 2F22                   MOV.L       R2,@R15
+    000000AA A001                   BRA         L380
+    000000AC 6E4B                   NEG         R4,R14
+    000000AE              L379:                             
+    000000AE 6E43                   MOV         R4,R14
+    000000B0              L380:                             
+          Snow.c    78            dy = abs(dy);
+    000000B0 4511                   CMP/PZ      R5
+    000000B2 8901                   BT          L381
+    000000B4 A001                   BRA         L382
+    000000B6 6B5B                   NEG         R5,R11
+    000000B8              L381:                             
+    000000B8 6B53                   MOV         R5,R11
+    000000BA              L382:                             
+          Snow.c    79            setpixel(x, y);
+    000000BA 65C3                   MOV         R12,R5
+    000000BC BFB0                   BSR         _setpixel
+    000000BE 64D3                   MOV         R13,R4
+          Snow.c    80            if(dx > dy)
+    000000C0 3EB7                   CMP/GT      R11,R14
+    000000C2 8F1F                   BF/S        L383
+    000000C4 E401                   MOV         #1,R4
+          Snow.c    81            {
+          Snow.c    82                    cumul = dx / 2;
+    000000C6 6AE3                   MOV         R14,R10
+    000000C8 E300                   MOV         #0,R3
+    000000CA 33A7                   CMP/GT      R10,R3
+    000000CC 3A3E                   ADDC        R3,R10
+    000000CE 4A21                   SHAR        R10
+          Snow.c    83                    for(i=1 ; i<dx ; i++)
+    000000D0 6943                   MOV         R4,R9
+    000000D2 39E3                   CMP/GE      R14,R9
+    000000D4 892B                   BT          L387
+    000000D6              L385:                             
+          Snow.c    84                    {
+          Snow.c    85                            x += sx;
+          Snow.c    86                            cumul += dy;
+    000000D6 3ABC                   ADD         R11,R10
+          Snow.c    87                            if(cumul > dx)
+    000000D8 3AE7                   CMP/GT      R14,R10
+    000000DA 8F03                   BF/S        L386
+    000000DC 3D8C                   ADD         R8,R13
+          Snow.c    88                            {
+          Snow.c    89                                    cumul -= dx;
+    000000DE 3AE8                   SUB         R14,R10
+          Snow.c    90                                    y += sy;
+    000000E0 62F2                   MOV.L       @R15,R2
+    000000E2 3C2C                   ADD         R2,R12
+    000000E4              L386:                             
+          Snow.c    91                            }
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    5
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+          Snow.c    92                            setpixel(x, y);
+    000000E4 65C3                   MOV         R12,R5
+    000000E6 BF9B                   BSR         _setpixel
+    000000E8 64D3                   MOV         R13,R4
+    000000EA 7901                   ADD         #1,R9
+    000000EC 39E3                   CMP/GE      R14,R9
+    000000EE 8BF2                   BF          L385
+    000000F0 A01D                   BRA         L387
+    000000F2 0009                   NOP
+    000000F4              L413:                             
+    000000F4 3039                   .DATA.W     H'3039
+    000000F6 0000                   .DATA.W     0
+    000000F8 <00000000>             .DATA.L     __$lastrandom
+    000000FC 41C64E6D               .DATA.L     H'41C64E6D
+    00000100 <00000000>             .DATA.L     _ShapeToDD
+    00000104              L383:                             
+          Snow.c    93                    }
+          Snow.c    94            }
+          Snow.c    95            else
+          Snow.c    96            {
+          Snow.c    97                    cumul = dy / 2;
+    00000104 6AB3                   MOV         R11,R10
+    00000106 E300                   MOV         #0,R3
+    00000108 33A7                   CMP/GT      R10,R3
+    0000010A 3A3E                   ADDC        R3,R10
+    0000010C 4A21                   SHAR        R10
+          Snow.c    98                    for(i=1 ; i<dy ; i++)
+    0000010E 6943                   MOV         R4,R9
+    00000110 39B3                   CMP/GE      R11,R9
+    00000112 890C                   BT          L387
+    00000114              L389:                             
+          Snow.c    99                    {
+          Snow.c   100                            y += sy;
+    00000114 63F2                   MOV.L       @R15,R3
+          Snow.c   101                            cumul += dx;
+    00000116 3AEC                   ADD         R14,R10
+          Snow.c   102                            if(cumul > dy)
+    00000118 3AB7                   CMP/GT      R11,R10
+    0000011A 8F02                   BF/S        L390
+    0000011C 3C3C                   ADD         R3,R12
+          Snow.c   103                            {
+          Snow.c   104                                    cumul -= dy;
+    0000011E 3AB8                   SUB         R11,R10
+          Snow.c   105                                    x += sx;
+    00000120 3D8C                   ADD         R8,R13
+    00000122              L390:                             
+          Snow.c   106                            }
+          Snow.c   107                            setpixel(x, y);
+    00000122 65C3                   MOV         R12,R5
+    00000124 BF7C                   BSR         _setpixel
+    00000126 64D3                   MOV         R13,R4
+    00000128 7901                   ADD         #1,R9
+    0000012A 39B3                   CMP/GE      R11,R9
+    0000012C 8BF2                   BF          L389
+    0000012E              L387:                             
+          Snow.c   108                    }
+          Snow.c   109            }
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    6
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+          Snow.c   110    }
+    0000012E 7F04                   ADD         #4,R15
+    00000130 4F26                   LDS.L       @R15+,PR
+    00000132 68F6                   MOV.L       @R15+,R8
+    00000134 69F6                   MOV.L       @R15+,R9
+    00000136 6AF6                   MOV.L       @R15+,R10
+    00000138 6BF6                   MOV.L       @R15+,R11
+    0000013A 6CF6                   MOV.L       @R15+,R12
+    0000013C 6DF6                   MOV.L       @R15+,R13
+    0000013E 000B                   RTS
+    00000140 6EF6                   MOV.L       @R15+,R14
+          Snow.c   111    
+          Snow.c   112    void drawsprite(unsigned char px, char py, float dirx)
+    00000142              _drawsprite:                     ; function: drawsprite
+                                                           ; frame size=44
+                                                           ; used runtime library name:
+                                                           ; __adds, __muls, __stoi, __stou, __itos, __lts
+    00000142 6043                   MOV         R4,R0
+    00000144 2FE6                   MOV.L       R14,@-R15
+    00000146 2FD6                   MOV.L       R13,@-R15
+    00000148 2FC6                   MOV.L       R12,@-R15
+    0000014A 2FB6                   MOV.L       R11,@-R15
+    0000014C 2FA6                   MOV.L       R10,@-R15
+    0000014E 2F96                   MOV.L       R9,@-R15
+    00000150 2F86                   MOV.L       R8,@-R15
+          Snow.c   113    {
+          Snow.c   114            char x;
+          Snow.c   115            float y;
+          Snow.c   116            for(y = 0; y < 9; y += 1)
+    00000152 E903                   MOV         #3,R9
+    00000154 4F22                   STS.L       PR,@-R15
+    00000156 E809                   MOV         #9,R8
+    00000158 7FF4                   ADD         #-12,R15
+    0000015A 80F8                   MOV.B       R0,@(8,R15)
+    0000015C 6053                   MOV         R5,R0
+    0000015E 80F4                   MOV.B       R0,@(4,R15)
+    00000160 2F62                   MOV.L       R6,@R15
+    00000162 A030                   BRA         L391
+    00000164 EA00                   MOV         #0,R10
+    00000166              L392:                             
+          Snow.c   117            for(x = 0; x < 3; x++)
+    00000166 EB00                   MOV         #0,R11
+    00000168 84F8                   MOV.B       @(8,R15),R0
+    0000016A 6D0C                   EXTU.B      R0,R13
+    0000016C D357                   MOV.L       L414+2,R3  ; __stoi
+    0000016E 430B                   JSR         @R3
+    00000170 60A3                   MOV         R10,R0
+    00000172 6C03                   MOV         R0,R12
+    00000174 DE56                   MOV.L       L414+6,R14 ; _sprite
+    00000176 6303                   MOV         R0,R3
+    00000178 4000                   SHLL        R0
+    0000017A 303C                   ADD         R3,R0
+    0000017C 3E0C                   ADD         R0,R14
+    0000017E              L393:                             
+          Snow.c   118                    if(sprite[(int)y][x] == 1)
+    0000017E 60E0                   MOV.B       @R14,R0
+    00000180 8801                   CMP/EQ      #1,R0
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    7
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    00000182 8B15                   BF          L394
+          Snow.c   119                            setpixel(px + x + ((9 - (int)y) * dirx), py + (int)y);
+    00000184 84F4                   MOV.B       @(4,R15),R0
+    00000186 6503                   MOV         R0,R5
+    00000188 D352                   MOV.L       L414+10,R3 ; __itos
+    0000018A 35CC                   ADD         R12,R5
+    0000018C 6083                   MOV         R8,R0
+    0000018E 430B                   JSR         @R3
+    00000190 30C8                   SUB         R12,R0
+    00000192 D251                   MOV.L       L414+14,R2 ; __muls
+    00000194 420B                   JSR         @R2
+    00000196 61F2                   MOV.L       @R15,R1
+    00000198 D34E                   MOV.L       L414+10,R3 ; __itos
+    0000019A 6103                   MOV         R0,R1
+    0000019C 430B                   JSR         @R3
+    0000019E 60D3                   MOV         R13,R0
+    000001A0 D34E                   MOV.L       L414+18,R3 ; __adds
+    000001A2 430B                   JSR         @R3
+    000001A4 0009                   NOP
+    000001A6 D44E                   MOV.L       L414+22,R4 ; __stou
+    000001A8 440B                   JSR         @R4
+    000001AA 0009                   NOP
+    000001AC BF38                   BSR         _setpixel
+    000001AE 640C                   EXTU.B      R0,R4
+    000001B0              L394:                             
+    000001B0 7B01                   ADD         #1,R11
+    000001B2 7D01                   ADD         #1,R13
+    000001B4 63BE                   EXTS.B      R11,R3
+    000001B6 3393                   CMP/GE      R9,R3
+    000001B8 8FE1                   BF/S        L393
+    000001BA 7E01                   ADD         #1,R14
+    000001BC D049                   MOV.L       L414+26,R0 ; H'3F800000
+    000001BE D347                   MOV.L       L414+18,R3 ; __adds
+    000001C0 430B                   JSR         @R3
+    000001C2 61A3                   MOV         R10,R1
+    000001C4 6A03                   MOV         R0,R10
+    000001C6              L391:                             
+    000001C6 D048                   MOV.L       L414+30,R0 ; H'41100000
+    000001C8 D248                   MOV.L       L414+34,R2 ; __lts
+    000001CA 420B                   JSR         @R2
+    000001CC 61A3                   MOV         R10,R1
+    000001CE 8800                   CMP/EQ      #0,R0
+    000001D0 8BC9                   BF          L392
+          Snow.c   120    }
+    000001D2 7F0C                   ADD         #12,R15
+    000001D4 4F26                   LDS.L       @R15+,PR
+    000001D6 68F6                   MOV.L       @R15+,R8
+    000001D8 69F6                   MOV.L       @R15+,R9
+    000001DA 6AF6                   MOV.L       @R15+,R10
+    000001DC 6BF6                   MOV.L       @R15+,R11
+    000001DE 6CF6                   MOV.L       @R15+,R12
+    000001E0 6DF6                   MOV.L       @R15+,R13
+    000001E2 000B                   RTS
+    000001E4 6EF6                   MOV.L       @R15+,R14
+          Snow.c   121    
+          Snow.c   122    #define P2I  6.28318531
+          Snow.c   123    
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    8
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+          Snow.c   124    void drawboom(unsigned char px, char py, char boom, float radius)
+    000001E6              _drawboom:                       ; function: drawboom
+                                                           ; frame size=60
+                                                           ; used runtime library name:
+                                                           ; __adds, __muls, __stod, __stoi, __itos, __ltd
+    000001E6 6043                   MOV         R4,R0
+    000001E8 2FE6                   MOV.L       R14,@-R15
+    000001EA 2FD6                   MOV.L       R13,@-R15
+    000001EC 2FC6                   MOV.L       R12,@-R15
+    000001EE 2FB6                   MOV.L       R11,@-R15
+    000001F0 2FA6                   MOV.L       R10,@-R15
+    000001F2 2F96                   MOV.L       R9,@-R15
+    000001F4 4F22                   STS.L       PR,@-R15
+    000001F6 7FF0                   ADD         #-16,R15
+          Snow.c   125    {
+          Snow.c   126            float cnt;
+          Snow.c   127            
+          Snow.c   128            for(cnt = 0; cnt < P2I; cnt += radius)
+    000001F8 D93D                   MOV.L       L414+38,R9 ; _sinf
+    000001FA 80F4                   MOV.B       R0,@(4,R15)
+    000001FC DA3D                   MOV.L       L414+42,R10; _cosf
+    000001FE 6053                   MOV         R5,R0
+    00000200 80FC                   MOV.B       R0,@(12,R15)
+    00000202 2F60                   MOV.B       R6,@R15
+    00000204 1F72                   MOV.L       R7,@(8,R15)
+    00000206 A028                   BRA         L395
+    00000208 EE00                   MOV         #0,R14
+    0000020A              L396:                             
+          Snow.c   129                    line(px, py, px + (int)(cosf(cnt) * boom), py + (int)(sinf(cnt) * boom));
+    0000020A 84FC                   MOV.B       @(12,R15),R0
+    0000020C 6B03                   MOV         R0,R11
+    0000020E 490B                   JSR         @R9
+    00000210 64E3                   MOV         R14,R4
+    00000212 6203                   MOV         R0,R2
+    00000214 D32F                   MOV.L       L414+10,R3 ; __itos
+    00000216 430B                   JSR         @R3
+    00000218 60F0                   MOV.B       @R15,R0
+    0000021A 6C03                   MOV         R0,R12
+    0000021C D32E                   MOV.L       L414+14,R3 ; __muls
+    0000021E 430B                   JSR         @R3
+    00000220 6123                   MOV         R2,R1
+    00000222 D22A                   MOV.L       L414+2,R2  ; __stoi
+    00000224 420B                   JSR         @R2
+    00000226 0009                   NOP
+    00000228 67B3                   MOV         R11,R7
+    0000022A 370C                   ADD         R0,R7
+    0000022C 2F76                   MOV.L       R7,@-R15
+    0000022E 84F8                   MOV.B       @(8,R15),R0
+    00000230 6D03                   MOV         R0,R13
+    00000232 6DDC                   EXTU.B      R13,R13
+    00000234 4A0B                   JSR         @R10
+    00000236 64E3                   MOV         R14,R4
+    00000238 D327                   MOV.L       L414+14,R3 ; __muls
+    0000023A 430B                   JSR         @R3
+    0000023C 61C3                   MOV         R12,R1
+    0000023E D223                   MOV.L       L414+2,R2  ; __stoi
+    00000240 420B                   JSR         @R2
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    9
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    00000242 0009                   NOP
+    00000244 66D3                   MOV         R13,R6
+    00000246 360C                   ADD         R0,R6
+    00000248 65B3                   MOV         R11,R5
+    0000024A 64D3                   MOV         R13,R4
+    0000024C BF07                   BSR         _line
+    0000024E 67F6                   MOV.L       @R15+,R7
+    00000250 50F2                   MOV.L       @(8,R15),R0
+    00000252 D222                   MOV.L       L414+18,R2 ; __adds
+    00000254 420B                   JSR         @R2
+    00000256 61E3                   MOV         R14,R1
+    00000258 6E03                   MOV         R0,R14
+    0000025A              L395:                             
+    0000025A 60E3                   MOV         R14,R0
+    0000025C D326                   MOV.L       L414+46,R3 ; __stod
+    0000025E 7FF8                   ADD         #-8,R15
+    00000260 430B                   JSR         @R3
+    00000262 2FF6                   MOV.L       R15,@-R15
+    00000264 D225                   MOV.L       L414+50,R2 ; H'5474A168
+    00000266 2F26                   MOV.L       R2,@-R15
+    00000268 D225                   MOV.L       L414+54,R2 ; H'401921FB
+    0000026A D326                   MOV.L       L414+58,R3 ; __ltd
+    0000026C 430B                   JSR         @R3
+    0000026E 2F26                   MOV.L       R2,@-R15
+    00000270 8800                   CMP/EQ      #0,R0
+    00000272 8BCA                   BF          L396
+          Snow.c   130    }
+    00000274 7F10                   ADD         #16,R15
+    00000276 4F26                   LDS.L       @R15+,PR
+    00000278 69F6                   MOV.L       @R15+,R9
+    0000027A 6AF6                   MOV.L       @R15+,R10
+    0000027C 6BF6                   MOV.L       @R15+,R11
+    0000027E 6CF6                   MOV.L       @R15+,R12
+    00000280 6DF6                   MOV.L       @R15+,R13
+    00000282 000B                   RTS
+    00000284 6EF6                   MOV.L       @R15+,R14
+          Snow.c   131    
+          Snow.c   132    #define CNT 15
+          Snow.c   133    
+          Snow.c   134    struct {unsigned char active;char boom;float dirx, y, x, radius;} fire[CNT];
+          Snow.c   135    
+          Snow.c   136    void display_vram()
+    00000286              _display_vram:                   ; function: display_vram
+                                                           ; frame size=16
+          Snow.c   137    {
+          Snow.c   138            char *LCD_register_selector = (char*)0xB4000000, *LCD_data_register = (char*)0xB4010000, *mvram;
+          Snow.c   139            int i, j;
+          Snow.c   140            mvram = vram;
+          Snow.c   141            for(i=0 ; i<64 ; i++)
+    00000286 E100                   MOV         #0,R1
+    00000288 D520                   MOV.L       L414+66,R5 ; H'B4000000
+    0000028A E704                   MOV         #4,R7
+    0000028C D420                   MOV.L       L414+70,R4 ; H'B4010000
+    0000028E 6013                   MOV         R1,R0
+    00000290 2FC6                   MOV.L       R12,@-R15
+    00000292 2FB6                   MOV.L       R11,@-R15
+    00000294 2FA6                   MOV.L       R10,@-R15
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   10
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    00000296 EB07                   MOV         #7,R11
+    00000298 D21B                   MOV.L       L414+62,R2 ; _vram
+    0000029A EA10                   MOV         #16,R10
+    0000029C 2F96                   MOV.L       R9,@-R15
+    0000029E E940                   MOV         #64,R9
+    000002A0 6C22                   MOV.L       @R2,R12
+    000002A2              L397:                             
+          Snow.c   142            {
+          Snow.c   143                    *LCD_register_selector = 4;
+          Snow.c   144                    *LCD_data_register = i|192;
+    000002A2 E3C0                   MOV         #-64,R3
+    000002A4 2570                   MOV.B       R7,@R5
+          Snow.c   145                    *LCD_register_selector = 4;
+          Snow.c   146                    *LCD_data_register = 0;
+          Snow.c   147                    *LCD_register_selector = 7;
+          Snow.c   148                    for(j=0 ; j<16 ; j++) *LCD_data_register = *mvram++;
+    000002A6 66A3                   MOV         R10,R6
+    000002A8 230B                   OR          R0,R3
+    000002AA 2430                   MOV.B       R3,@R4
+    000002AC 2570                   MOV.B       R7,@R5
+    000002AE 2410                   MOV.B       R1,@R4
+    000002B0 25B0                   MOV.B       R11,@R5
+    000002B2              L398:                             
+    000002B2 4610                   DT          R6
+    000002B4 63C4                   MOV.B       @R12+,R3
+    000002B6 8FFC                   BF/S        L398
+    000002B8 2430                   MOV.B       R3,@R4
+    000002BA 7001                   ADD         #1,R0
+    000002BC 3093                   CMP/GE      R9,R0
+    000002BE 8BF0                   BF          L397
+          Snow.c   149            }
+          Snow.c   150    }
+    000002C0 69F6                   MOV.L       @R15+,R9
+    000002C2 6AF6                   MOV.L       @R15+,R10
+    000002C4 6BF6                   MOV.L       @R15+,R11
+    000002C6 000B                   RTS
+    000002C8 6CF6                   MOV.L       @R15+,R12
+    000002CA              L414:                             
+    000002CA 0000                   .DATA.W     0
+    000002CC <00000000>             .DATA.L     __stoi
+    000002D0 <00000000>             .DATA.L     _sprite
+    000002D4 <00000000>             .DATA.L     __itos
+    000002D8 <00000000>             .DATA.L     __muls
+    000002DC <00000000>             .DATA.L     __adds
+    000002E0 <00000000>             .DATA.L     __stou
+    000002E4 3F800000               .DATA.L     H'3F800000
+    000002E8 41100000               .DATA.L     H'41100000
+    000002EC <00000000>             .DATA.L     __lts
+    000002F0 <00000000>             .DATA.L     _sinf
+    000002F4 <00000000>             .DATA.L     _cosf
+    000002F8 <00000000>             .DATA.L     __stod
+    000002FC 5474A168               .DATA.L     H'5474A168
+    00000300 401921FB               .DATA.L     H'401921FB
+    00000304 <00000000>             .DATA.L     __ltd
+    00000308 <00000000>             .DATA.L     _vram
+    0000030C B4000000               .DATA.L     H'B4000000
+    00000310 B4010000               .DATA.L     H'B4010000
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   11
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+          Snow.c   151    
+          Snow.c   152    char isMainMenu()
+    00000314              _isMainMenu:                     ; function: isMainMenu
+                                                           ; frame size=0
+          Snow.c   153    {
+          Snow.c   154            unsigned int ea;
+          Snow.c   155            unsigned int j;
+          Snow.c   156            ea = *(unsigned int*)0x8001007C;
+    00000314 D342                   MOV.L       L415+4,R3  ; H'8001007C
+          Snow.c   157            ea += 0x0490*4;
+          Snow.c   158            ea = *(unsigned int*)( ea );
+          Snow.c   159            j = *(unsigned char*)( ea + 1 );
+          Snow.c   160            j *= 4;
+          Snow.c   161            j = ( ea + j + 4 ) & 0xFFFFFFFC;
+    00000316 E1FC                   MOV         #-4,R1
+    00000318 9280                   MOV.W       L415,R2    ; H'1240
+    0000031A 6432                   MOV.L       @R3,R4
+    0000031C 342C                   ADD         R2,R4
+    0000031E 6442                   MOV.L       @R4,R4
+    00000320 8441                   MOV.B       @(1,R4),R0
+    00000322 650C                   EXTU.B      R0,R5
+    00000324 4508                   SHLL2       R5
+    00000326 345C                   ADD         R5,R4
+    00000328 7404                   ADD         #4,R4
+    0000032A 2419                   AND         R1,R4
+          Snow.c   162            j = *(unsigned int*)( j ) + 1;
+    0000032C 6442                   MOV.L       @R4,R4
+          Snow.c   163            
+          Snow.c   164            return *(unsigned char*)j;
+          Snow.c   165    }
+    0000032E 000B                   RTS
+    00000330 8441                   MOV.B       @(1,R4),R0
+          Snow.c   166    
+          Snow.c   167    char variable[24]={0};
+          Snow.c   168    
+          Snow.c   169    void snowtimer(void)
+    00000332              _snowtimer:                      ; function: snowtimer
+                                                           ; frame size=76
+                                                           ; used runtime library name:
+                                                           ; __modlu, __adds, __addd, __subs, __divs, __divdr, __dtos, __stoi, __sto
+                        +                                  u, __utos, __utod, __eqs, __gts, __lts
+    00000332 2FE6                   MOV.L       R14,@-R15
+    00000334 2FD6                   MOV.L       R13,@-R15
+    00000336 2FC6                   MOV.L       R12,@-R15
+    00000338 2FB6                   MOV.L       R11,@-R15
+    0000033A 2FA6                   MOV.L       R10,@-R15
+    0000033C 2F96                   MOV.L       R9,@-R15
+    0000033E 2F86                   MOV.L       R8,@-R15
+    00000340 4F22                   STS.L       PR,@-R15
+    00000342 7FF8                   ADD         #-8,R15
+          Snow.c   170    {
+          Snow.c   171            unsigned char x;
+          Snow.c   172            
+          Snow.c   173            if(!isMainMenu())
+    00000344 BFE6                   BSR         _isMainMenu
+    00000346 0009                   NOP
+    00000348 600E                   EXTS.B      R0,R0
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   12
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    0000034A 2008                   TST         R0,R0
+    0000034C 8901                   BT          L416
+    0000034E A0F0                   BRA         L400
+    00000350 0009                   NOP
+    00000352              L416:                             
+          Snow.c   174            {
+          Snow.c   175                    display_vram();
+    00000352 BF98                   BSR         _display_vram
+    00000354 0009                   NOP
+          Snow.c   176                    
+          Snow.c   177                    for(x =CNT - 1; x > 0 ; x--)
+    00000356 E20E                   MOV         #14,R2
+    00000358 DE32                   MOV.L       L415+8,R14 ; _fire
+    0000035A E80F                   MOV         #15,R8
+    0000035C 945F                   MOV.W       L415+2,R4  ; H'0118
+    0000035E E900                   MOV         #0,R9
+    00000360 2F20                   MOV.B       R2,@R15
+    00000362 34EC                   ADD         R14,R4
+    00000364 1F41                   MOV.L       R4,@(4,R15)
+    00000366 6C43                   MOV         R4,R12
+    00000368 6BC3                   MOV         R12,R11
+    0000036A              L401:                             
+    0000036A 6AF0                   MOV.B       @R15,R10
+    0000036C 6AAC                   EXTU.B      R10,R10
+    0000036E 63A3                   MOV         R10,R3
+    00000370 4A08                   SHLL2       R10
+    00000372 3A3C                   ADD         R3,R10
+    00000374 4A08                   SHLL2       R10
+    00000376 60A3                   MOV         R10,R0
+    00000378 00EC                   MOV.B       @(R0,R14),R0
+    0000037A 600C                   EXTU.B      R0,R0
+    0000037C 8801                   CMP/EQ      #1,R0
+    0000037E 8901                   BT          L417
+    00000380 A083                   BRA         L402
+    00000382 0009                   NOP
+    00000384              L417:                             
+          Snow.c   178                    {
+          Snow.c   179                            if(fire[x].active == 1)
+          Snow.c   180                            {
+          Snow.c   181                                    if(fire[x].boom == 0)
+    00000384 62A3                   MOV         R10,R2
+    00000386 32EC                   ADD         R14,R2
+    00000388 8421                   MOV.B       @(1,R2),R0
+    0000038A 2008                   TST         R0,R0
+    0000038C 8B62                   BF          L403
+          Snow.c   182                                    {
+          Snow.c   183                                            drawsprite(fire[x].x, fire[x].y, fire[x].dirx);
+    0000038E 6DA3                   MOV         R10,R13
+    00000390 D525                   MOV.L       L415+12,R5 ; __stoi
+    00000392 3DEC                   ADD         R14,R13
+    00000394 56D1                   MOV.L       @(4,R13),R6
+    00000396 450B                   JSR         @R5
+    00000398 50D2                   MOV.L       @(8,R13),R0
+    0000039A 650E                   EXTS.B      R0,R5
+    0000039C D423                   MOV.L       L415+16,R4 ; __stou
+    0000039E 440B                   JSR         @R4
+    000003A0 50D3                   MOV.L       @(12,R13),R0
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   13
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    000003A2 BECE                   BSR         _drawsprite
+    000003A4 640C                   EXTU.B      R0,R4
+          Snow.c   184                                            fire[x].y -= fire[x].y / 64;
+    000003A6 D022                   MOV.L       L415+20,R0 ; H'42800000
+    000003A8 D322                   MOV.L       L415+24,R3 ; __divs
+    000003AA 430B                   JSR         @R3
+    000003AC 51D2                   MOV.L       @(8,R13),R1
+    000003AE D222                   MOV.L       L415+28,R2 ; __subs
+    000003B0 420B                   JSR         @R2
+    000003B2 51D2                   MOV.L       @(8,R13),R1
+    000003B4 1D02                   MOV.L       R0,@(8,R13)
+          Snow.c   185                                            fire[x].x += fire[x].dirx;
+    000003B6 50D1                   MOV.L       @(4,R13),R0
+    000003B8 D320                   MOV.L       L415+32,R3 ; __adds
+    000003BA 430B                   JSR         @R3
+    000003BC 51D3                   MOV.L       @(12,R13),R1
+    000003BE 1D03                   MOV.L       R0,@(12,R13)
+          Snow.c   186                                            if(fire[x].y == 0 || fire[x].x > 127 || fire[x].x < 0)
+    000003C0 51D2                   MOV.L       @(8,R13),R1
+    000003C2 D21F                   MOV.L       L415+36,R2 ; __eqs
+    000003C4 420B                   JSR         @R2
+    000003C6 E000                   MOV         #0,R0
+    000003C8 8800                   CMP/EQ      #0,R0
+    000003CA 8B0B                   BF          L405
+    000003CC D01D                   MOV.L       L415+40,R0 ; H'42FE0000
+    000003CE D31E                   MOV.L       L415+44,R3 ; __gts
+    000003D0 430B                   JSR         @R3
+    000003D2 51D3                   MOV.L       @(12,R13),R1
+    000003D4 8800                   CMP/EQ      #0,R0
+    000003D6 8B05                   BF          L405
+    000003D8 51D3                   MOV.L       @(12,R13),R1
+    000003DA D21C                   MOV.L       L415+48,R2 ; __lts
+    000003DC 420B                   JSR         @R2
+    000003DE E000                   MOV         #0,R0
+    000003E0 8800                   CMP/EQ      #0,R0
+    000003E2 8902                   BT          L404
+    000003E4              L405:                             
+          Snow.c   187                                                    fire[x].active = 0;
+    000003E4 63A3                   MOV         R10,R3
+    000003E6 33EC                   ADD         R14,R3
+    000003E8 2390                   MOV.B       R9,@R3
+    000003EA              L404:                             
+          Snow.c   188                                            if(random(0) % (int)fire[x].y == 0 && fire[x].boom == 0)
+    000003EA BE09                   BSR         _random
+    000003EC E400                   MOV         #0,R4
+    000003EE 6103                   MOV         R0,R1
+    000003F0 D30D                   MOV.L       L415+12,R3 ; __stoi
+    000003F2 64A3                   MOV         R10,R4
+    000003F4 34EC                   ADD         R14,R4
+    000003F6 430B                   JSR         @R3
+    000003F8 5042                   MOV.L       @(8,R4),R0
+    000003FA D315                   MOV.L       L415+52,R3 ; __modlu
+    000003FC 430B                   JSR         @R3
+    000003FE 0009                   NOP
+    00000400 8800                   CMP/EQ      #0,R0
+    00000402 8901                   BT          L418
+    00000404 A088                   BRA         L409
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   14
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    00000406 0009                   NOP
+    00000408              L418:                             
+    00000408 8441                   MOV.B       @(1,R4),R0
+    0000040A 2008                   TST         R0,R0
+    0000040C 8901                   BT          L419
+    0000040E A083                   BRA         L409
+    00000410 0009                   NOP
+    00000412              L419:                             
+          Snow.c   189                                                    fire[x].boom++;
+    00000412 3AEC                   ADD         R14,R10
+    00000414 84A1                   MOV.B       @(1,R10),R0
+    00000416 7001                   ADD         #1,R0
+    00000418 A07E                   BRA         L409
+    0000041A 80A1                   MOV.B       R0,@(1,R10)
+    0000041C              L415:                             
+    0000041C 1240                   .DATA.W     H'1240
+    0000041E 0118                   .DATA.W     H'0118
+    00000420 8001007C               .DATA.L     H'8001007C
+    00000424 <00000000>             .DATA.L     _fire
+    00000428 <00000000>             .DATA.L     __stoi
+    0000042C <00000000>             .DATA.L     __stou
+    00000430 42800000               .DATA.L     H'42800000
+    00000434 <00000000>             .DATA.L     __divs
+    00000438 <00000000>             .DATA.L     __subs
+    0000043C <00000000>             .DATA.L     __adds
+    00000440 <00000000>             .DATA.L     __eqs
+    00000444 42FE0000               .DATA.L     H'42FE0000
+    00000448 <00000000>             .DATA.L     __gts
+    0000044C <00000000>             .DATA.L     __lts
+    00000450 <00000000>             .DATA.L     __modlu
+    00000454              L403:                             
+          Snow.c   190                                    }
+          Snow.c   191                                    else
+          Snow.c   192                                    {
+          Snow.c   193                                            drawboom(fire[x].x, fire[x].y, fire[x].boom++, fire[x].radius);
+    00000454 57B4                   MOV.L       @(16,R11),R7
+    00000456 84B1                   MOV.B       @(1,R11),R0
+    00000458 D548                   MOV.L       L420+2,R5  ; __stoi
+    0000045A 7001                   ADD         #1,R0
+    0000045C 80B1                   MOV.B       R0,@(1,R11)
+    0000045E 70FF                   ADD         #-1,R0
+    00000460 6603                   MOV         R0,R6
+    00000462 450B                   JSR         @R5
+    00000464 50B2                   MOV.L       @(8,R11),R0
+    00000466 650E                   EXTS.B      R0,R5
+    00000468 D445                   MOV.L       L420+6,R4  ; __stou
+    0000046A 440B                   JSR         @R4
+    0000046C 50B3                   MOV.L       @(12,R11),R0
+    0000046E BEBA                   BSR         _drawboom
+    00000470 640C                   EXTU.B      R0,R4
+          Snow.c   194                                            if(fire[x].boom >= (random(0) % 16) + 16)
+    00000472 84B1                   MOV.B       @(1,R11),R0
+    00000474 2F06                   MOV.L       R0,@-R15
+    00000476 BDC3                   BSR         _random
+    00000478 E400                   MOV         #0,R4
+    0000047A 2089                   AND         R8,R0
+    0000047C 62F6                   MOV.L       @R15+,R2
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   15
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    0000047E 7010                   ADD         #16,R0
+    00000480 3202                   CMP/HS      R0,R2
+    00000482 8B49                   BF          L409
+          Snow.c   195                                                    fire[x].active = 0;
+    00000484 51F1                   MOV.L       @(4,R15),R1
+    00000486 A047                   BRA         L409
+    00000488 2190                   MOV.B       R9,@R1
+    0000048A              L402:                             
+          Snow.c   196                                    }
+          Snow.c   197                            }
+          Snow.c   198                            else
+          Snow.c   199                            {
+          Snow.c   200                                    if(random(0) % 32 == 0)
+    0000048A BDB9                   BSR         _random
+    0000048C E400                   MOV         #0,R4
+    0000048E C81F                   TST         #31,R0
+    00000490 8B42                   BF          L409
+          Snow.c   201                                    {
+          Snow.c   202                                            fire[x].active = 1;
+    00000492 E201                   MOV         #1,R2
+    00000494 2C20                   MOV.B       R2,@R12
+          Snow.c   203                                            fire[x].x = random(0) % 128;
+    00000496 BDB3                   BSR         _random
+    00000498 E400                   MOV         #0,R4
+    0000049A D23A                   MOV.L       L420+10,R2 ; __utos
+    0000049C 420B                   JSR         @R2
+    0000049E C97F                   AND         #127,R0
+    000004A0 1C03                   MOV.L       R0,@(12,R12)
+          Snow.c   204                                            fire[x].dirx = (random(0) % 20) / 10.0 - 1.0;
+    000004A2 7FF0                   ADD         #-16,R15
+    000004A4 BDAC                   BSR         _random
+    000004A6 E400                   MOV         #0,R4
+    000004A8 D237                   MOV.L       L420+14,R2 ; __modlu
+    000004AA 6103                   MOV         R0,R1
+    000004AC 420B                   JSR         @R2
+    000004AE E014                   MOV         #20,R0
+    000004B0 D336                   MOV.L       L420+18,R3 ; __utod
+    000004B2 7FF8                   ADD         #-8,R15
+    000004B4 430B                   JSR         @R3
+    000004B6 2FF6                   MOV.L       R15,@-R15
+    000004B8 D136                   MOV.L       L420+26,R1 ; __divdr
+    000004BA E200                   MOV         #0,R2
+    000004BC 2F26                   MOV.L       R2,@-R15
+    000004BE D234                   MOV.L       L420+22,R2 ; H'40240000
+    000004C0 2F26                   MOV.L       R2,@-R15
+    000004C2 63F3                   MOV         R15,R3
+    000004C4 7310                   ADD         #16,R3
+    000004C6 410B                   JSR         @R1
+    000004C8 2F36                   MOV.L       R3,@-R15
+    000004CA E200                   MOV         #0,R2
+    000004CC D133                   MOV.L       L420+34,R1 ; __addd
+    000004CE 2F26                   MOV.L       R2,@-R15
+    000004D0 D231                   MOV.L       L420+30,R2 ; H'BFF00000
+    000004D2 2F26                   MOV.L       R2,@-R15
+    000004D4 63F3                   MOV         R15,R3
+    000004D6 7310                   ADD         #16,R3
+    000004D8 410B                   JSR         @R1
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   16
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    000004DA 2F36                   MOV.L       R3,@-R15
+    000004DC D230                   MOV.L       L420+38,R2 ; __dtos
+    000004DE 420B                   JSR         @R2
+    000004E0 0009                   NOP
+    000004E2 1C01                   MOV.L       R0,@(4,R12)
+          Snow.c   205                                            fire[x].y = 64;
+    000004E4 D32F                   MOV.L       L420+42,R3 ; H'42800000
+          Snow.c   206                                            fire[x].boom = 0;
+    000004E6 6093                   MOV         R9,R0
+    000004E8 1C32                   MOV.L       R3,@(8,R12)
+    000004EA 80C1                   MOV.B       R0,@(1,R12)
+          Snow.c   207                                            fire[x].radius = P2I / ((random(0) % 16) + 8);
+    000004EC D32E                   MOV.L       L420+46,R3 ; H'5474A168
+    000004EE 7FF8                   ADD         #-8,R15
+    000004F0 2F36                   MOV.L       R3,@-R15
+    000004F2 D32E                   MOV.L       L420+50,R3 ; H'401921FB
+    000004F4 2F36                   MOV.L       R3,@-R15
+    000004F6 BD83                   BSR         _random
+    000004F8 E400                   MOV         #0,R4
+    000004FA 2089                   AND         R8,R0
+    000004FC D323                   MOV.L       L420+18,R3 ; __utod
+    000004FE 7FF8                   ADD         #-8,R15
+    00000500 7008                   ADD         #8,R0
+    00000502 430B                   JSR         @R3
+    00000504 2FF6                   MOV.L       R15,@-R15
+    00000506 62F3                   MOV         R15,R2
+    00000508 D122                   MOV.L       L420+26,R1 ; __divdr
+    0000050A 7210                   ADD         #16,R2
+    0000050C 410B                   JSR         @R1
+    0000050E 2F26                   MOV.L       R2,@-R15
+    00000510 D323                   MOV.L       L420+38,R3 ; __dtos
+    00000512 430B                   JSR         @R3
+    00000514 0009                   NOP
+    00000516 1C04                   MOV.L       R0,@(16,R12)
+    00000518              L409:                             
+    00000518 62F0                   MOV.B       @R15,R2
+    0000051A 7CEC                   ADD         #-20,R12
+    0000051C 72FF                   ADD         #-1,R2
+    0000051E 2F20                   MOV.B       R2,@R15
+    00000520 53F1                   MOV.L       @(4,R15),R3
+    00000522 622C                   EXTU.B      R2,R2
+    00000524 73EC                   ADD         #-20,R3
+    00000526 4215                   CMP/PL      R2
+    00000528 1F31                   MOV.L       R3,@(4,R15)
+    0000052A 8F02                   BF/S        L421
+    0000052C 7BEC                   ADD         #-20,R11
+    0000052E AF1C                   BRA         L401
+    00000530 0009                   NOP
+    00000532              L421:                             
+    00000532              L400:                             
+          Snow.c   208                                    }
+          Snow.c   209                            }
+          Snow.c   210                    }       
+          Snow.c   211            }
+          Snow.c   212            
+          Snow.c   213            Alpha_GetData('A',variable);
+    00000532 E700                   MOV         #0,R7
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   17
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    00000534 D51F                   MOV.L       L420+58,R5 ; _variable
+    00000536 6673                   MOV         R7,R6
+    00000538 D21D                   MOV.L       L420+54,R2 ; _iSysCallFuncPtr
+    0000053A 6322                   MOV.L       @R2,R3
+    0000053C 911D                   MOV.W       L420,R1    ; H'04DF
+    0000053E 2F16                   MOV.L       R1,@-R15
+    00000540 430B                   JSR         @R3
+    00000542 E441                   MOV         #65,R4
+          Snow.c   214            if(variable[0])
+    00000544 D31B                   MOV.L       L420+58,R3 ; _variable
+    00000546 6230                   MOV.B       @R3,R2
+    00000548 2228                   TST         R2,R2
+    0000054A 8D0C                   BT/S        L411
+    0000054C 7F04                   ADD         #4,R15
+          Snow.c   215            {
+          Snow.c   216                    KillTimer(1);
+    0000054E E401                   MOV         #1,R4
+    00000550 D219                   MOV.L       L420+62,R2 ; _KillTimer
+    00000552 7F08                   ADD         #8,R15
+    00000554 4F26                   LDS.L       @R15+,PR
+    00000556 68F6                   MOV.L       @R15+,R8
+    00000558 69F6                   MOV.L       @R15+,R9
+    0000055A 6AF6                   MOV.L       @R15+,R10
+    0000055C 6BF6                   MOV.L       @R15+,R11
+    0000055E 6CF6                   MOV.L       @R15+,R12
+    00000560 6DF6                   MOV.L       @R15+,R13
+    00000562 422B                   JMP         @R2
+    00000564 6EF6                   MOV.L       @R15+,R14
+    00000566              L411:                             
+          Snow.c   217            }
+          Snow.c   218    }
+    00000566 7F08                   ADD         #8,R15
+    00000568 4F26                   LDS.L       @R15+,PR
+    0000056A 68F6                   MOV.L       @R15+,R8
+    0000056C 69F6                   MOV.L       @R15+,R9
+    0000056E 6AF6                   MOV.L       @R15+,R10
+    00000570 6BF6                   MOV.L       @R15+,R11
+    00000572 6CF6                   MOV.L       @R15+,R12
+    00000574 6DF6                   MOV.L       @R15+,R13
+    00000576 000B                   RTS
+    00000578 6EF6                   MOV.L       @R15+,R14
+    0000057A              L420:                             
+    0000057A 04DF                   .DATA.W     H'04DF
+    0000057C <00000000>             .DATA.L     __stoi
+    00000580 <00000000>             .DATA.L     __stou
+    00000584 <00000000>             .DATA.L     __utos
+    00000588 <00000000>             .DATA.L     __modlu
+    0000058C <00000000>             .DATA.L     __utod
+    00000590 40240000               .DATA.L     H'40240000
+    00000594 <00000000>             .DATA.L     __divdr
+    00000598 BFF00000               .DATA.L     H'BFF00000
+    0000059C <00000000>             .DATA.L     __addd
+    000005A0 <00000000>             .DATA.L     __dtos
+    000005A4 42800000               .DATA.L     H'42800000
+    000005A8 5474A168               .DATA.L     H'5474A168
+    000005AC 401921FB               .DATA.L     H'401921FB
+    000005B0 <00000000>             .DATA.L     _iSysCallFuncPtr
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   18
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    000005B4 <00000000>             .DATA.L     _variable
+    000005B8 <00000000>             .DATA.L     _KillTimer
+          Snow.c   219    
+          Snow.c   220    int AddIn_main(int isAppli, unsigned short OptionNum)
+    000005BC              _AddIn_main:                     ; function: AddIn_main
+                                                           ; frame size=24
+                                                           ; used runtime library name:
+                                                           ; __slow_mvn
+    000005BC 2FE6                   MOV.L       R14,@-R15
+    000005BE 2FD6                   MOV.L       R13,@-R15
+    000005C0 4F22                   STS.L       PR,@-R15
+    000005C2 7FF8                   ADD         #-8,R15
+          Snow.c   221    {
+          Snow.c   222            unsigned int key;
+          Snow.c   223            unsigned char text[3] = {0xE6, 0x91, 0};
+    000005C4 D22C                   MOV.L       L422+4,R2  ; L343
+    000005C6 61F3                   MOV         R15,R1
+    000005C8 D32C                   MOV.L       L422+8,R3  ; __slow_mvn
+    000005CA 7104                   ADD         #4,R1
+    000005CC 430B                   JSR         @R3
+    000005CE E003                   MOV         #3,R0
+          Snow.c   224            random(RTC_GetTicks());
+    000005D0 D12B                   MOV.L       L422+12,R1 ; _RTC_GetTicks
+    000005D2 410B                   JSR         @R1
+    000005D4 0009                   NOP
+    000005D6 BD13                   BSR         _random
+    000005D8 6403                   MOV         R0,R4
+          Snow.c   225            vram = Disp_GetVRAMPtr();
+    000005DA D22A                   MOV.L       L422+16,R2 ; _Disp_GetVRAMPtr
+    000005DC 420B                   JSR         @R2
+    000005DE 0009                   NOP
+    000005E0 D329                   MOV.L       L422+20,R3 ; _vram
+          Snow.c   226            Alpha_ClearAll();
+    000005E2 E700                   MOV         #0,R7
+    000005E4 D129                   MOV.L       L422+24,R1 ; _iSysCallFuncPtr
+    000005E6 6673                   MOV         R7,R6
+    000005E8 2302                   MOV.L       R0,@R3
+    000005EA 6573                   MOV         R7,R5
+    000005EC 6212                   MOV.L       @R1,R2
+    000005EE 9341                   MOV.W       L422,R3    ; H'04E1
+    000005F0 2F36                   MOV.L       R3,@-R15
+    000005F2 420B                   JSR         @R2
+    000005F4 6473                   MOV         R7,R4
+          Snow.c   227            AllClr_VRAM();
+    000005F6 D226                   MOV.L       L422+28,R2 ; _AllClr_VRAM
+    000005F8 420B                   JSR         @R2
+    000005FA 0009                   NOP
+          Snow.c   228            locate(3,3);
+    000005FC DE25                   MOV.L       L422+32,R14; _locate
+    000005FE E503                   MOV         #3,R5
+    00000600 4E0B                   JSR         @R14
+    00000602 6453                   MOV         R5,R4
+          Snow.c   229            Print(&"~*| Firework |*~");
+    00000604 DD24                   MOV.L       L422+36,R13; _Print
+    00000606 D425                   MOV.L       L422+40,R4 ; L347
+    00000608 4D0B                   JSR         @R13
+    0000060A 0009                   NOP
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   19
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+          Snow.c   230            locate(4,1);
+    0000060C E501                   MOV         #1,R5
+    0000060E 4E0B                   JSR         @R14
+    00000610 E404                   MOV         #4,R4
+          Snow.c   231            Print(&"(C) by Casimo");
+    00000612 D423                   MOV.L       L422+44,R4 ; L348
+    00000614 4D0B                   JSR         @R13
+    00000616 0009                   NOP
+          Snow.c   232            locate(4,5);
+    00000618 E505                   MOV         #5,R5
+    0000061A 4E0B                   JSR         @R14
+    0000061C E404                   MOV         #4,R4
+          Snow.c   233            Print(&"press any key");
+    0000061E D421                   MOV.L       L422+48,R4 ; L349
+    00000620 4D0B                   JSR         @R13
+    00000622 0009                   NOP
+          Snow.c   234            locate(6,6);
+    00000624 E506                   MOV         #6,R5
+    00000626 4E0B                   JSR         @R14
+    00000628 6453                   MOV         R5,R4
+          Snow.c   235            Print(&"to start");
+    0000062A D41F                   MOV.L       L422+52,R4 ; L350
+    0000062C 4D0B                   JSR         @R13
+    0000062E 0009                   NOP
+          Snow.c   236            locate(4,8);
+    00000630 E508                   MOV         #8,R5
+    00000632 4E0B                   JSR         @R14
+    00000634 E404                   MOV         #4,R4
+          Snow.c   237            Print(&"exit with 1 A");
+    00000636 D41D                   MOV.L       L422+56,R4 ; L351
+    00000638 4D0B                   JSR         @R13
+    0000063A 0009                   NOP
+          Snow.c   238            locate(15,8);
+    0000063C E508                   MOV         #8,R5
+    0000063E 4E0B                   JSR         @R14
+    00000640 E40F                   MOV         #15,R4
+          Snow.c   239            Print(&text);
+    00000642 64F3                   MOV         R15,R4
+    00000644 4D0B                   JSR         @R13
+    00000646 7408                   ADD         #8,R4
+          Snow.c   240            display_vram();
+    00000648 BE1D                   BSR         _display_vram
+    0000064A 0009                   NOP
+          Snow.c   241            GetKey(&key);
+    0000064C D218                   MOV.L       L422+60,R2 ; _GetKey
+    0000064E 64F3                   MOV         R15,R4
+    00000650 420B                   JSR         @R2
+    00000652 7404                   ADD         #4,R4
+          Snow.c   242            Timer_Install(6, &snowtimer, 300);
+    00000654 960F                   MOV.W       L422+2,R6  ; H'012C
+    00000656 D517                   MOV.L       L422+64,R5 ; _snowtimer
+    00000658 D317                   MOV.L       L422+68,R3 ; _Timer_Install
+    0000065A 430B                   JSR         @R3
+    0000065C E406                   MOV         #6,R4
+          Snow.c   243            Timer_Start(6);
+    0000065E D217                   MOV.L       L422+72,R2 ; _Timer_Start
+    00000660 420B                   JSR         @R2
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   20
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+    00000662 E406                   MOV         #6,R4
+          Snow.c   244            App_PROG();
+    00000664 D316                   MOV.L       L422+76,R3 ; _App_PROG
+    00000666 430B                   JSR         @R3
+    00000668 0009                   NOP
+          Snow.c   245    }
+    0000066A 7F0C                   ADD         #12,R15
+    0000066C 4F26                   LDS.L       @R15+,PR
+    0000066E 6DF6                   MOV.L       @R15+,R13
+    00000670 000B                   RTS
+    00000672 6EF6                   MOV.L       @R15+,R14
+    00000674              L422:                             
+    00000674 04E1                   .DATA.W     H'04E1
+    00000676 012C                   .DATA.W     H'012C
+    00000678 <00000000>             .DATA.L     L343
+    0000067C <00000000>             .DATA.L     __slow_mvn
+    00000680 <00000000>             .DATA.L     _RTC_GetTicks
+    00000684 <00000000>             .DATA.L     _Disp_GetVRAMPtr
+    00000688 <00000000>             .DATA.L     _vram
+    0000068C <00000000>             .DATA.L     _iSysCallFuncPtr
+    00000690 <00000000>             .DATA.L     _AllClr_VRAM
+    00000694 <00000000>             .DATA.L     _locate
+    00000698 <00000000>             .DATA.L     _Print
+    0000069C <00000000>             .DATA.L     L347
+    000006A0 <00000000>             .DATA.L     L348
+    000006A4 <00000000>             .DATA.L     L349
+    000006A8 <00000000>             .DATA.L     L350
+    000006AC <00000000>             .DATA.L     L351
+    000006B0 <00000000>             .DATA.L     _GetKey
+    000006B4 <00000000>             .DATA.L     _snowtimer
+    000006B8 <00000000>             .DATA.L     _Timer_Install
+    000006BC <00000000>             .DATA.L     _Timer_Start
+    000006C0 <00000000>             .DATA.L     _App_PROG
+          Snow.c   246    
+          Snow.c   247    #pragma section _BR_Size
+          Snow.c   248    unsigned long BR_Size;
+          Snow.c   249    #pragma section
+          Snow.c   250    #pragma section _TOP
+          Snow.c   251    int InitializeSystem(int isAppli, unsigned short OptionNum)
+P_T 00000000              _InitializeSystem:               ; function: InitializeSystem
+                                                           ; frame size=4
+          Snow.c   252    {return INIT_ADDIN_APPLICATION(isAppli, OptionNum);}
+    00000000 D303                   MOV.L       L423+2,R3  ; _INIT_ADDIN_APPLICATION
+    00000002 7FFC                   ADD         #-4,R15
+    00000004 2F51                   MOV.W       R5,@R15
+    00000006 65F1                   MOV.W       @R15,R5
+    00000008 655D                   EXTU.W      R5,R5
+    0000000A 432B                   JMP         @R3
+    0000000C 7F04                   ADD         #4,R15
+    0000000E              L423:                             
+    0000000E 0000                   .DATA.W     0
+    00000010 <00000000>             .DATA.L     _INIT_ADDIN_APPLICATION
+          Snow.c   253    #pragma section
+          Snow.c   254    
+C   00000000              _SysCallWrapper:                 ; static: SysCallWrapper
+    00000000 D201422B60             .DATA.L     H'D201422B,H'60F20000,H'80010070
+             F200008001   
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE   21
+
+
+SCT OFFSET   CODE       C LABEL     INSTRUCTION OPERAND    COMMENT
+
+             0070         
+    0000000C              _sprite:                         ; static: sprite
+    0000000C 0001000101             .DATA.B     H'00,H'01,H'00,H'01,H'01,H'01,H'01,H'00,H'01,H'01,H'00,H'01,H'01,H'00,H'01,H'01,
+             0101000101 +                       H'01,H'01,H'00,H'00,H'01,H'00,H'00,H'01,H'00,H'00,H'01
+             0001010001   
+             0101010000   
+             0100000100   
+             0001         
+    00000027              L343:
+    00000027 E69100                 .DATA.B     H'E6,H'91,H'00
+    0000002A 00000002               .RES.W      1
+    0000002C              L347:
+    0000002C 7E2A7C2046             .SDATA      "~*| Firework |*~"
+             697265776F   
+             726B207C2A   
+             7E           
+    0000003C 00                     .DATA.B     H'00
+    0000003D 00000001               .RES.B      1
+    0000003E 00000002               .RES.W      1
+    00000040              L348:
+    00000040 2843292062             .SDATA      "(C) by Casimo"
+             7920436173   
+             696D6F       
+    0000004D 00                     .DATA.B     H'00
+    0000004E 00000002               .RES.W      1
+    00000050              L349:
+    00000050 7072657373             .SDATA      "press any key"
+             20616E7920   
+             6B6579       
+    0000005D 00                     .DATA.B     H'00
+    0000005E 00000002               .RES.W      1
+    00000060              L350:
+    00000060 746F207374             .SDATA      "to start"
+             617274       
+    00000068 00                     .DATA.B     H'00
+    00000069 00000001               .RES.B      1
+    0000006A 00000002               .RES.W      1
+    0000006C              L351:
+    0000006C 6578697420             .SDATA      "exit with 1 A"
+             7769746820   
+             312041       
+    00000079 00                     .DATA.B     H'00
+D   00000000              _iSysCallFuncPtr:                ; static: iSysCallFuncPtr
+    00000000 <00000000>             .DATA.L     _SysCallWrapper
+    00000004              __$lastrandom:                   ; static: lastrandom
+    00000004 12345678               .DATA.L     H'12345678
+    00000008              _variable:                       ; static: variable
+    00000008 00                     .DATA.B     H'00
+    00000009 0000001701             .DATAB.B    23,0
+             00           
+B   00000000              _vram:                           ; static: vram
+    00000000 00000004               .RES.L      1
+    00000004              _fire:                           ; static: fire
+    00000004 0000012C               .RES.L      75
+B_B 00000000              _BR_Size:                        ; static: BR_Size
+    00000000 00000004               .RES.L      1
+
+
+
+
+
+SH SERIES C/C++ Compiler (Ver. 6.0C)                                                                 29-Dec-2012 11:39:59  PAGE    1
+
+
+******** STATISTICS INFORMATION ********
+
+
+********** ERROR INFORMATION ***********
+
+NUMBER OF ERRORS:           0
+NUMBER OF WARNINGS:         0
+
+
+
+
+******* SOURCE LINE INFORMATION ********
+
+COMPILED SOURCE LINE:      254
+
+
+
+******* SECTION SIZE INFORMATION *******
+
+PROGRAM  SECTION (P):                               000006C4 Byte(s)
+PROGRAM  SECTION (P_BR_Size):                       00000000 Byte(s)
+PROGRAM  SECTION (P_TOP):                           00000014 Byte(s)
+CONSTANT SECTION (C):                               0000007A Byte(s)
+CONSTANT SECTION (C_BR_Size):                       00000000 Byte(s)
+CONSTANT SECTION (C_TOP):                           00000000 Byte(s)
+DATA     SECTION (D):                               00000020 Byte(s)
+DATA     SECTION (D_BR_Size):                       00000000 Byte(s)
+DATA     SECTION (D_TOP):                           00000000 Byte(s)
+BSS      SECTION (B):                               00000130 Byte(s)
+BSS      SECTION (B_BR_Size):                       00000004 Byte(s)
+BSS      SECTION (B_TOP):                           00000000 Byte(s)
+
+ TOTAL PROGRAM SIZE: 000008A6 Byte(s)
+
+
+
+********** LABEL INFORMATION ***********
+
+NUMBER OF EXTERNAL REFERENCE SYMBOLS:           33
+NUMBER OF EXTERNAL DEFINITION SYMBOLS:          17
+NUMBER OF INTERNAL/EXTERNAL SYMBOLS:           101
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*** COMMAND PARAMETER ***
+
+
+  -subcommand=C:\Users\Timo\AppData\Local\Temp\hmk3709.tmp 
+
